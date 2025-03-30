@@ -94,6 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
             //             console.log('Panel moved:', evt.item.id, 'New index:', evt.newIndex);
             //             // Update panel order in this.panels array if needed
             //             // Save new layout state
+            //             this.updatePanelOrderFromDOM(); // Update order after library move
+            //             this.saveLayout(); // Save after reordering
             //         }
             //     });
             // } else {
@@ -109,7 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
              let draggedPanel = null;
 
              this.container.addEventListener('dragstart', (e) => {
-                if (e.target.classList.contains('panel')) {
+                // Ensure dragging the panel itself, not draggable content inside
+                if (e.target.classList.contains('panel') && !e.target.querySelector('.panel-content')?.contains(e.explicitOriginalTarget)) {
                     draggedPanel = e.target;
                     setTimeout(() => e.target.classList.add('dragging'), 0);
                      // Set data (panel ID)
@@ -120,43 +123,51 @@ document.addEventListener('DOMContentLoaded', () => {
              });
 
              this.container.addEventListener('dragend', (e) => {
-                if (draggedPanel && e.target.classList.contains('panel')) {
-                    e.target.classList.remove('dragging');
+                if (draggedPanel && e.target === draggedPanel) { // Check if it's the panel we started dragging
+                    draggedPanel.classList.remove('dragging'); // Use variable in case e.target is wrong
                     draggedPanel = null;
                     console.log("Panel drag end");
-                    // Save layout might be needed here after drop
                 }
              });
 
              this.container.addEventListener('dragover', (e) => {
                  e.preventDefault(); // Necessary to allow dropping
-                 // Basic placeholder logic - doesn't truly reorder smoothly
+                 // Basic visual feedback - which element are we hovering over?
+                 // A library provides much better dropzone indication
                  const targetPanel = e.target.closest('.panel');
-                 if (targetPanel && draggedPanel && targetPanel !== draggedPanel) {
-                     // Determine drop position relative to targetPanel (complex logic needed here)
-                 }
+                 // Add class to container or target for visual feedback if needed
              });
 
              this.container.addEventListener('drop', (e) => {
                  e.preventDefault();
                  if (draggedPanel) {
                      const targetPanel = e.target.closest('.panel');
+                     const droppedOnContainer = e.target === this.container;
+
                      if (targetPanel && targetPanel !== draggedPanel) {
                          console.log(`Panel ${draggedPanel.id} dropped near ${targetPanel.id}`);
-                         // Simple insertion logic (doesn't handle grid well)
-                         // A library handles this MUCH better
+                         // Simple insertion logic (doesn't handle grid columns well)
+                         // A library handles grid insertion MUCH better
                          const rect = targetPanel.getBoundingClientRect();
-                         const offsetY = e.clientY - rect.top;
-                         if (offsetY < rect.height / 2) {
+                         const containerRect = this.container.getBoundingClientRect();
+                         const offsetX = e.clientX - containerRect.left; // Use clientX relative to container
+                         const targetMiddleX = targetPanel.offsetLeft + targetPanel.offsetWidth / 2;
+
+                         // Decide before/after based on horizontal position within the grid flow
+                         if (offsetX < targetMiddleX) {
                               targetPanel.parentNode.insertBefore(draggedPanel, targetPanel);
                          } else {
                               targetPanel.parentNode.insertBefore(draggedPanel, targetPanel.nextSibling);
                          }
-                         // Update internal panel order and save layout
+                         this.updatePanelOrderFromDOM(); // Update state and save
+                     } else if (droppedOnContainer && !targetPanel) {
+                         // Dropped onto empty container space, append to end
+                         this.container.appendChild(draggedPanel);
                          this.updatePanelOrderFromDOM();
                      }
+                      // Clean up regardless of where it was dropped
                       draggedPanel.classList.remove('dragging');
-                      draggedPanel = null; // Reset after drop handled by this listener
+                      draggedPanel = null;
                  }
              });
         }
@@ -193,13 +204,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     layout.forEach(panelConfig => {
                         // Ensure loaded IDs don't clash if we didn't reset counter
-                        const maxId = parseInt(panelConfig.id.split('-')[1]);
-                         if (maxId >= this.panelIdCounter) {
-                           this.panelIdCounter = maxId + 1;
+                         // Find max existing ID to prevent collision after load -> addPanel
+                        const currentIdNum = parseInt(panelConfig.id.split('-')[1]);
+                         if (!isNaN(currentIdNum) && currentIdNum >= this.panelIdCounter) {
+                           this.panelIdCounter = currentIdNum + 1;
                          }
-                        this.addPanel(panelConfig.config); // Add panel with saved config
+                        this.addPanel(panelConfig.config); // Add panel with saved config using its original ID logic
                     });
                     console.log("Layout Loaded");
+                     this.updatePanelOrderFromDOM(); // Ensure order matches loaded state if addPanel appends
                     return true;
                 } catch (error) {
                     console.error("Error loading layout:", error);
@@ -230,6 +243,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 ...config // Merge provided config
             };
+             // Ensure customStyle is an object even if config didn't provide it well
+            if (typeof this.config.customStyle !== 'object' || this.config.customStyle === null) {
+                this.config.customStyle = { background: null, rounding: null, padding: null };
+            }
+
 
             this.element = null; // DOM element ref
             this.headerElement = null;
@@ -256,10 +274,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.setTitle(this.config.title);
             this.setWidth(this.config.widthClass);
 
-            // Apply custom styles from config
-            this.applyStyle('background', this.config.customStyle.background);
-            this.applyStyle('rounding', this.config.customStyle.rounding);
-            this.applyStyle('padding', this.config.customStyle.padding);
+            // Apply custom styles from config (ensure customStyle exists)
+            this.applyStyle('background', this.config.customStyle?.background);
+            this.applyStyle('rounding', this.config.customStyle?.rounding);
+            this.applyStyle('padding', this.config.customStyle?.padding);
 
 
             // Attach event listeners
@@ -306,10 +324,15 @@ document.addEventListener('DOMContentLoaded', () => {
         applyStyle(property, value, isGlobal = false) {
             if (!this.element) return;
 
+            // Ensure customStyle object exists
+            if (typeof this.config.customStyle !== 'object' || this.config.customStyle === null) {
+                 this.config.customStyle = {};
+            }
+
              // If not applying globally, store as custom style
-            if (!isGlobal && value !== null && value !== undefined) {
+            if (!isGlobal && value !== null && value !== undefined && value !== '') {
                  this.config.customStyle[property] = value;
-            } else if (!isGlobal && (value === null || value === undefined)) {
+            } else if (!isGlobal && (value === null || value === undefined || value === '')) {
                  // Explicitly removing custom style, revert to global/default
                  this.config.customStyle[property] = null;
             }
@@ -317,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Determine the value to apply (custom overrides global/default)
             let effectiveValue = this.config.customStyle[property]; // Use custom first
-             if (effectiveValue === null || effectiveValue === undefined) {
+             if (effectiveValue === null || effectiveValue === undefined || effectiveValue === '') {
                   // Fallback to global/CSS default if no custom style
                  effectiveValue = this.manager.globalSettings[property] ?? null; // Use global if set
              }
@@ -328,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
              // Apply the style using CSS Variables on the specific panel element
              switch(property) {
                  case 'background':
-                     this.element.style.setProperty('--panel-custom-background-image', effectiveValue ? `url('${effectiveValue}')` : 'none');
+                     this.element.style.setProperty('--panel-custom-background-image', effectiveValue ? `url('${effectiveValue}')` : null); // null removes override
                      break;
                  case 'rounding':
                       // Apply custom or fallback to root default
@@ -340,19 +363,26 @@ document.addEventListener('DOMContentLoaded', () => {
                      break;
                  // Spacing is handled globally by PanelManager
              }
-             // Save layout if needed after style change
-             // this.manager.saveLayout(); // Potentially save on style change
+             // Save layout if needed after style change - potential performance hit if done often
+             // this.manager.saveLayout();
         }
 
 
         openSettings() {
              console.log(`Opening settings for ${this.id}`);
+
+             // Ensure customStyle exists before accessing
+            const currentBg = this.config.customStyle?.background || '';
+            const currentRounding = this.config.customStyle?.rounding ?? this.manager.globalSettings.rounding;
+            const currentPadding = this.config.customStyle?.padding ?? this.manager.globalSettings.padding;
+
+
              // Populate modal with current panel's settings
              settingsForm.querySelector('#settings-panel-id').value = this.id;
              settingsForm.querySelector('#settings-title').value = this.config.title;
-             settingsForm.querySelector('#settings-background').value = this.config.customStyle.background || '';
-             settingsForm.querySelector('#settings-rounding').value = this.config.customStyle.rounding ?? this.manager.globalSettings.rounding;
-             settingsForm.querySelector('#settings-padding').value = this.config.customStyle.padding ?? this.manager.globalSettings.padding;
+             settingsForm.querySelector('#settings-background').value = currentBg;
+             settingsForm.querySelector('#settings-rounding').value = currentRounding;
+             settingsForm.querySelector('#settings-padding').value = currentPadding;
              settingsForm.querySelector('#settings-jscode').value = this.config.jsCode;
 
              // Populate global setting (spacing) - it's edited here but applied globally
@@ -368,6 +398,8 @@ document.addEventListener('DOMContentLoaded', () => {
         runJsCode() {
              if (!this.config.jsCode) {
                  this.contentElement.innerHTML = '<p>No JS code provided.</p>'; // Clear content if code removed
+                  // Re-initialize drag/drop for this default content
+                 this.initContentDragDrop();
                  return;
              };
              if (!this.contentElement) return;
@@ -386,12 +418,12 @@ document.addEventListener('DOMContentLoaded', () => {
                      element: this.contentElement,
                      id: this.id,
                      setTitle: this.setTitle.bind(this),
-                     getData: (key) => { /* TODO: Implement data storage/retrieval */ return null; },
-                     setData: (key, value) => { /* TODO: Implement data storage/retrieval */ },
-                     // Add more API methods as needed
+                     getData: (key) => { /* TODO: Implement data storage/retrieval */ console.warn(`API getData(${key}) not implemented`); return null; },
+                     setData: (key, value) => { /* TODO: Implement data storage/retrieval */ console.warn(`API setData(${key}, ${value}) not implemented`);},
+                     // Add more API methods as needed (e.g., makeHttpRequest, etc., requiring careful security)
                  };
                  // 'use strict'; might be good to add inside the Function body
-                 const func = new Function('panel', this.config.jsCode);
+                 const func = new Function('panel', `'use strict'; ${this.config.jsCode}`);
                  func(panelApi);
 
                  // After running user JS, re-attach drag/drop listeners to new content
@@ -424,17 +456,25 @@ document.addEventListener('DOMContentLoaded', () => {
             //                 move: (event) => {
             //                     // Update element width based on event.rect.width
             //                     // Provide visual feedback
+            //                     let width = event.rect.width;
+            //                      this.element.style.width = `${width}px`; // Direct style for feedback
             //                 },
             //                 end: (event) => {
+            //                      this.element.style.width = ''; // Remove direct style
             //                     // Snap to nearest width class (1/6, 1/3 etc.)
             //                     const newWidth = event.rect.width;
-            //                     const containerWidth = this.manager.container.offsetWidth;
+            //                     const containerWidth = this.manager.container.offsetWidth - (2 * this.manager.globalSettings.spacing); // Account for container padding
             //                     const ratio = newWidth / containerWidth;
             //                     // Logic to determine closest width class...
-            //                     let closestClass = 'width-1-6'; // default smallest
-            //                     if (ratio > 0.9) closestClass = 'width-full';
-            //                     else if (ratio > 0.75) closestClass = 'width-5-6';
-            //                     // ... etc.
+            //                      const thresholds = { 'width-full': 0.91, 'width-5-6': 0.75, 'width-2-3': 0.58, 'width-1-2': 0.41, 'width-1-3': 0.24, 'width-1-6': 0 };
+            //                      let closestClass = 'width-1-6'; // Default smallest
+            //                      for (const cls in thresholds) {
+            //                           if (ratio > thresholds[cls]) {
+            //                               closestClass = cls;
+            //                               break;
+            //                           }
+            //                      }
+            //                     console.log(`Resized ratio: ${ratio.toFixed(2)}, Snapped to: ${closestClass}`);
             //                     this.setWidth(closestClass);
             //                     // Save layout
             //                     this.manager.saveLayout();
@@ -442,7 +482,9 @@ document.addEventListener('DOMContentLoaded', () => {
             //             },
             //             modifiers: [ /* Potential modifiers for snapping during resize */ ],
             //             inertia: true
-            //         });
+            //         })
+            //         // Chain draggable configuration if using Interact.js for both
+            //         // .draggable({/* ... */});
             // } else {
             //     console.warn("Interact.js library not found. Panel resizing disabled.");
             // }
@@ -452,11 +494,23 @@ document.addEventListener('DOMContentLoaded', () => {
         initContentDragDrop() {
              if (!this.contentElement) return;
 
-            // Make specific items draggable
+             // Clear existing listeners before adding new ones to prevent duplicates
+             // This is a simple approach; more robust solutions might use event delegation
+             const oldDraggables = this.contentElement.querySelectorAll('.draggable-item');
+             oldDraggables.forEach(item => {
+                 // Quick way to remove all listeners: clone and replace node
+                 // item.parentNode.replaceChild(item.cloneNode(true), item);
+                 // OR track listeners manually if needed (more complex)
+             });
+             // Re-select potentially new items after JS execution
              const draggableItems = this.contentElement.querySelectorAll('.draggable-item');
+
+            // Make specific items draggable
              draggableItems.forEach(item => {
                  item.draggable = true; // Ensure it's set
-                 item.addEventListener('dragstart', (e) => {
+                 // Remove old listeners before adding if element persisted (less likely with innerHTML reset)
+                 // item.removeEventListener('dragstart', this.handleContentDragStart); // Need named function or tracking
+                 item.addEventListener('dragstart', (e) => { // Using anonymous for simplicity here
                      e.stopPropagation(); // Prevent panel drag listener interference
                      console.log(`Content drag start from ${this.id}:`, e.target);
                      // Example: Set data based on element type
@@ -468,161 +522,45 @@ document.addEventListener('DOMContentLoaded', () => {
                      } else {
                          data = e.target.textContent || 'Dragged Content';
                      }
-                     e.dataTransfer.setData(type, data);
-                     e.dataTransfer.effectAllowed = 'copyMove';
+                      try {
+                         e.dataTransfer.setData(type, data);
+                         e.dataTransfer.effectAllowed = 'copyMove';
+                     } catch (error) {
+                          console.error("Error setting drag data:", error);
+                     }
                  });
-                  item.addEventListener('dragend', (e) => {
+                 // Remove old listeners before adding if element persisted
+                  // item.removeEventListener('dragend', this.handleContentDragEnd);
+                 item.addEventListener('dragend', (e) => {
                       e.stopPropagation();
                   });
              });
 
-             // Make the content area a drop target
+             // --- Drop Target Listeners on Content Area ---
+             // Remove potential old listeners before adding new ones
+            // A more robust way is needed if elements aren't completely replaced
+             // this.contentElement.removeEventListener('dragenter', this.handleContentDragEnter);
              this.contentElement.addEventListener('dragenter', (e) => {
                  e.preventDefault();
                  e.stopPropagation();
                  this.contentElement.classList.add('drag-over');
              });
 
+             // this.contentElement.removeEventListener('dragover', this.handleContentDragOver);
              this.contentElement.addEventListener('dragover', (e) => {
                  e.preventDefault(); // MUST preventDefault to allow drop
                  e.stopPropagation();
-                 e.dataTransfer.dropEffect = 'copy'; // Indicate it's a valid target
+                 // Check data type compatibility if needed
+                 // Example: Only allow text drops
+                 // if (e.dataTransfer.types.includes('text/plain')) {
+                      e.dataTransfer.dropEffect = 'copy'; // Indicate it's a valid target
+                 // } else {
+                 //    e.dataTransfer.dropEffect = 'none';
+                 // }
              });
 
+             // this.contentElement.removeEventListener('dragleave', this.handleContentDragLeave);
               this.contentElement.addEventListener('dragleave', (e) => {
-                 e.preventDefault();
-                 e.stopPropagation();
-                 this.contentElement.classList.remove('drag-over');
-             });
-
-             this.contentElement.addEventListener('drop', (e) => {
-                 e.preventDefault();
-                 e.stopPropagation();
-                 this.contentElement.classList.remove('drag-over');
-                 console.log(`Content dropped onto ${this.id}`);
-
-                 // Process dropped data
-                 const types = e.dataTransfer.types;
-                 console.log("Data types:", types);
-
-                 let droppedContent = 'Received: ';
-                 if (types.includes('text/uri-list')) {
-                     const uri = e.dataTransfer.getData('text/uri-list');
-                     console.log("Dropped URI:", uri);
-                     droppedContent += `<img src="${uri}" alt="Dropped Image" style="max-width: 100px;">`;
-                 } else if (types.includes('text/plain')) {
-                     const text = e.dataTransfer.getData('text/plain');
-                     console.log("Dropped Text:", text);
-                      droppedContent += text;
-                 } else {
-                    console.log("Cannot handle dropped data types:", types);
-                    droppedContent += "Unhandled data format.";
-                 }
-
-                 // Append dropped content (example behavior)
-                 // In a real app, the panel's JS module should handle this
-                 const p = document.createElement('p');
-                 p.innerHTML = droppedContent;
-                 this.contentElement.appendChild(p);
-
-                 // Potentially trigger panel's JS to handle the drop event
-                 // this.triggerJsEvent('contentDrop', { dataTransfer: e.dataTransfer });
-             });
-        }
-
-        getConfig() {
-             // Return serializable config for saving
-            return {
-                 title: this.config.title,
-                 widthClass: this.config.widthClass,
-                 jsCode: this.config.jsCode,
-                 customStyle: this.config.customStyle
-             };
-        }
-
-
-    } // End Panel Class
-
-    // --- Settings Modal Logic ---
-    function hideSettingsModal() {
-        settingsModal.hidden = true;
-    }
-
-    closeModalBtn.addEventListener('click', hideSettingsModal);
-    settingsModal.addEventListener('click', (e) => { // Close on backdrop click
-        if (e.target === settingsModal) {
-            hideSettingsModal();
-        }
-    });
-
-    settingsForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const panelId = settingsForm.querySelector('#settings-panel-id').value;
-        const applyAll = settingsForm.querySelector('#settings-apply-all').checked;
-
-        const targetPanel = panelManager.getPanelById(panelId);
-        if (!targetPanel && !applyAll) {
-             console.error("Target panel not found for settings update.");
-             hideSettingsModal();
-             return;
-        }
-
-        // Get values from form
-        const newTitle = settingsForm.querySelector('#settings-title').value;
-        const newBg = settingsForm.querySelector('#settings-background').value || null; // null if empty
-        const newRounding = settingsForm.querySelector('#settings-rounding').value;
-        const newPadding = settingsForm.querySelector('#settings-padding').value;
-        const newSpacing = settingsForm.querySelector('#settings-spacing').value; // Always global
-        const newJsCode = settingsForm.querySelector('#settings-jscode').value;
-
-        console.log(`Applying settings - Panel: ${panelId}, ApplyAll: ${applyAll}`);
-
-         // Apply Spacing Globally
-         panelManager.applyGlobalStyle('spacing', newSpacing);
-
-        if (applyAll) {
-            // Apply relevant styles globally or to all panels
-             panelManager.applyGlobalStyle('rounding', newRounding);
-             panelManager.applyGlobalStyle('padding', newPadding);
-             // Apply background globally? Or iterate panels? Decided to iterate for override clear.
-             panelManager.panels.forEach(p => {
-                 p.applyStyle('background', newBg, true); // Apply bg to all
-                 // Could potentially set titles or JS code globally too if needed
-             });
-
-        } else if (targetPanel) {
-            // Apply to specific panel
-            targetPanel.setTitle(newTitle);
-            targetPanel.applyStyle('background', newBg);
-            targetPanel.applyStyle('rounding', newRounding);
-            targetPanel.applyStyle('padding', newPadding);
-            targetPanel.config.jsCode = newJsCode; // Update stored code
-            targetPanel.runJsCode(); // Re-run code after update
-        }
-
-         // Save layout after changes
-         panelManager.saveLayout();
-
-        hideSettingsModal();
-    });
-
-
-    // --- Initialization ---
-    const panelManager = new PanelManager(panlzContainer);
-
-    // Load existing layout or create initial setup
-    if (!panelManager.loadLayout()) {
-        console.log("No saved layout found, creating initial setup.");
-        // Initial Setup: 1 full, 6 half-width below in two columns
-        panelManager.addPanel({ title: "Top Panel", widthClass: 'width-full', jsCode: "panel.element.innerHTML = '<h1>Full Width Panel</h1><p>Content here.</p>';" });
-
-        // Add panels that will form two columns (CSS Grid handles placement)
-        for (let i = 0; i < 6; i++) {
-             panelManager.addPanel({ title: `Panel ${i + 1}`, widthClass: 'width-1-2' });
-        }
-        panelManager.saveLayout(); // Save the initial layout
-    }
-
-     console.log("PANLZ Initialized.");
-
-}); // End DOMContentLoaded
+                 // Check if the leave is to an internal element vs outside the content area
+                 if (!this.contentElement.contains(e.relatedTarget)) {
+                    this.contentElement.classList.remove
