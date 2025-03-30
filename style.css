@@ -11,7 +11,7 @@
     --panel-corner-rounding: 10px; /* Default */
     --panel-padding: 10px; /* Default */
     --panel-spacing: 10px; /* Default */
-    --container-background-image: url('https://github.com/geoffmccabe/panlz/blob/main/images/perc-bkgd.webp?raw=true'); /* Default */
+    --container-background-image: url('https://github.com/geoffmccabe/panlz2/blob/main/images/percs_bkgd1.webp?raw=true'); /* Updated URL */
     --modal-bg: rgba(0, 0, 0, 0.5);
     --modal-content-bg: #fff;
     --base-grid-unit: calc(100% / 6); /* 1/6th of container width */
