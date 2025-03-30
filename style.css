@@ -92,16 +92,18 @@ body {
     background-image: inherit;
     background-size: cover;
     background-position: center;
+    cursor: grab; /* Indicate header is draggable for panel */
 }
 
 .panel-settings-btn {
     background: none;
     border: none;
     font-size: 1.2em;
-    cursor: pointer;
+    cursor: pointer; /* Override grab cursor */
     margin-right: 10px;
     color: inherit;
     padding: 5px;
+    flex-shrink: 0; /* Prevent button from shrinking */
 }
 .panel-settings-btn:hover {
     opacity: 0.7;
@@ -114,6 +116,7 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    pointer-events: none; /* Prevent title from interfering with header drag */
 }
 
 .panel-content {
@@ -129,6 +132,7 @@ body {
 .panel.dragging {
     opacity: 0.5;
     border: 2px dashed #007bff;
+    cursor: grabbing; /* Indicate dragging */
 }
 
 .panel-content.drag-over {
@@ -150,6 +154,8 @@ body {
 
 /* Settings Modal Styles */
 .modal {
+    /* *** HIDE BY DEFAULT using display: none *** */
+    display: none;
     position: fixed;
     z-index: 1000;
     left: 0;
@@ -158,10 +164,18 @@ body {
     height: 100%;
     overflow: auto;
     background-color: var(--modal-bg);
-    display: flex; /* Use flexbox for centering */
+    /* We will change display to 'flex' via JS to show it */
+    /* align-items: center; (Applied when display: flex) */
+    /* justify-content: center; (Applied when display: flex) */
+}
+
+/* Style applied when modal is shown via JS */
+.modal.is-visible {
+    display: flex;
     align-items: center;
     justify-content: center;
 }
+
 
 .modal-content {
     background-color: var(--modal-content-bg);
