@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PANLZ Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    </head>
+<body>
+    <div id="panlz-container">
+        </div>
+
+    <template id="panel-template">
+        <div class="panel" draggable="true"> <div class="panel-header">
+                <button class="panel-settings-btn" aria-label="Panel Settings">⚙️</button>
+                <span class="panel-title">Panel Title</span>
+                </div>
+            <div class="panel-content">
+                <p draggable="true" class="draggable-item">Drag Me!</p>
+                <img src="https://via.placeholder.com/50" alt="Draggable Image" draggable="true" class="draggable-item"/>
+            </div>
+            </div>
+    </template>
+
+    <div id="settings-modal" class="modal" hidden>
+        <div class="modal-content">
+            <button class="modal-close" aria-label="Close Settings">&times;</button>
+            <h2>Panel Settings</h2>
+            <form id="settings-form">
+                <input type="hidden" id="settings-panel-id">
+                <div class="form-group scope-group">
+                    <label>
+                        <input type="checkbox" id="settings-apply-all"> Apply to All Panels
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="settings-background">Background Texture (URL or Upload):</label>
+                    <input type="text" id="settings-background" placeholder="Enter image URL (e.g., https://...)">
+                    </div>
+                <div class="form-group">
+                    <label for="settings-rounding">Corner Rounding (px):</label>
+                    <input type="number" id="settings-rounding" min="0" max="50" value="10">
+                </div>
+                <div class="form-group">
+                    <label for="settings-padding">Padding (px):</label>
+                    <input type="number" id="settings-padding" min="0" max="50" value="10">
+                </div>
+                <div class="form-group">
+                    <label for="settings-spacing">Spacing Between Panels (px):</label>
+                    <input type="number" id="settings-spacing" min="0" max="50" value="10">
+                </div>
+                <div class="form-group">
+                     <label for="settings-title">Panel Title:</label>
+                    <input type="text" id="settings-title">
+                </div>
+                 <div class="form-group">
+                    <label for="settings-jscode">JavaScript Code:</label>
+                    <textarea id="settings-jscode" rows="10" placeholder="Enter JavaScript code to run in this panel."></textarea>
+                    <small><strong>Security Warning:</strong> Executing arbitrary code has security risks!</small>
+                 </div>
+                <button type="submit">Apply Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js" defer></script>
+</body>
+</html>
